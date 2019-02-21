@@ -8,8 +8,6 @@
 #include <sigslot/sigslot.h>
 #include <experimental/coroutine>
 
-#include <iostream>
-
 namespace sigslot {
     namespace internal {
 
@@ -83,13 +81,11 @@ namespace sigslot {
             }
 
             auto final_suspend() {
-                std::cerr << "final_suspend\n";
                 complete();
                 return std::experimental::suspend_always{};
             }
 
             auto initial_suspend() {
-                std::cerr << "initial suspend\n";
                 return std::experimental::suspend_always{};
             }
 
@@ -187,23 +183,19 @@ namespace sigslot {
             }
 
             bool await_ready() {
-                std::cerr << "await_ready " << (!task.running()) << std::endl;
                 return !task.running();
             }
 
             void await_suspend(std::experimental::coroutine_handle<> h) {
-                std::cerr << "await_suspend " << (!task.running()) << std::endl;
                 // The awaiting coroutine is already suspended.
                 awaiting = h;
             }
 
             auto await_resume() {
-                std::cerr << "await_resume\n";
                 return task.get();
             }
 
             void resolve() {
-                std::cerr << "Resolve()\n";
                 if (awaiting) awaiting.resume();
             }
 

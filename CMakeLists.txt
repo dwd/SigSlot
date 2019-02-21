@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.13)
+project(sigslot)
 
 set (CMAKE_CXX_STANDARD 17)
 
 include_directories(.)
 add_executable(example example.cc sigslot/sigslot.h)
-target_link_libraries(example PUBLIC)
 
 add_executable(co_example co_example.cc sigslot/sigslot.h)
 if (UNIX)
