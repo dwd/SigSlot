@@ -53,8 +53,6 @@ namespace sigslot {
             std::recursive_mutex m_barrier;
         public:
             virtual void slot_disconnect(has_slots *pslot) = 0;
-
-            virtual void slot_duplicate(const has_slots *poldslot, has_slots *pnewslot) = 0;
         };
     }
 
@@ -66,10 +64,7 @@ namespace sigslot {
         typedef typename std::set<internal::_signal_base_lo *> sender_set;
 
     public:
-        has_slots() : m_senders()
-        {
-            ;
-        }
+        has_slots() = default;
 
         has_slots(const has_slots& hs) = delete;
         has_slots(has_slots && hs) = delete;
@@ -113,16 +108,6 @@ namespace sigslot {
             _connection(has_slots *pobject, std::function<void(args... a)> fn, bool once)
                     : one_shot(once), m_pobject(pobject), m_fn(fn) {}
 
-            _connection<args...>* clone()
-            {
-                return new _connection<args...>(m_pobject, m_fn, one_shot);
-            }
-
-            _connection<args...>* duplicate(has_slots* pnewdest)
-            {
-                return new _connection<args...>(pnewdest, m_fn, one_shot);
-            }
-
             void emit(args... a)
             {
                 m_fn(a...);
@@ -146,10 +131,7 @@ namespace sigslot {
         public:
             typedef typename std::list<_connection<args...> *>  connections_list;
 
-            _signal_base() : _signal_base_lo(), m_connected_slots()
-            {
-                ;
-            }
+            _signal_base() = default;
 
             _signal_base(const _signal_base& s)
                     : _signal_base_lo(s), m_connected_slots()
@@ -207,17 +189,6 @@ namespace sigslot {
                 );
             }
 
-            void slot_duplicate(const has_slots* oldtarget, has_slots* newtarget) final
-            {
-                std::lock_guard<std::recursive_mutex> lock(m_barrier);
-                for (auto i : m_connected_slots) {
-                    if(i->getdest() == oldtarget)
-                    {
-                        m_connected_slots.push_back(i->duplicate(newtarget));
-                    }
-                }
-            }
-
         protected:
             connections_list m_connected_slots;
         };
@@ -238,16 +209,9 @@ namespace sigslot {
     public:
         typedef typename internal::_signal_base<args...>::connections_list::const_iterator const_iterator;
 
-        signal()
-        {
-            ;
-        }
+        signal() = default;
 
-        signal(const signal<args...>& s)
-        : internal::_signal_base<args...>(s)
-        {
-            ;
-        }
+        signal(const signal<args...>& s) = default;
 
         void connect(has_slots *pclass, std::function<void(args...)> &&fn, bool one_shot = false)
         {
@@ -462,7 +426,7 @@ namespace sigslot {
             awaitable(awaitable const & a) : signal(a.signal), ready(a.ready) {
                 signal.await_(this);
             }
-            awaitable(awaitable && other) noexcept : signal(other.signal), ready(std::move(other.ready)) {
+            awaitable(awaitable && other) noexcept : signal(other.signal), ready(other.ready) {
                 signal.await_(this);
             }
 
@@ -475,9 +439,7 @@ namespace sigslot {
                 awaiting = h;
             }
 
-            void await_resume() {
-                return;
-            }
+            void await_resume() {}
 
             void resolve() {
                 ready = true;

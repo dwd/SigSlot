@@ -39,7 +39,6 @@ public:
 		 * Sometimes, you might want to have a callback that's
 		 * safely decoupled. This is one way of doing this.
 		 */
-		// TODO : Initiate a connect, or whatever.
 		return m_callbacks[domain];
 	}
 	void connect_done(std::string const & domain) {
