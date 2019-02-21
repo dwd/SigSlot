@@ -7,6 +7,7 @@
 
 #include <sigslot/sigslot.h>
 #include <experimental/coroutine>
+#include <string>
 
 namespace sigslot {
     namespace internal {
