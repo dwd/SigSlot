@@ -46,6 +46,9 @@ namespace sigslot {
                     // Never started, so start now.
                     const_cast<tasklet *>(this)->start();
                 }
+                if (!coro.promise().finished) {
+                    throw std::runtime_error("Not finished yet");
+                }
                 return coro.promise().get();
             }
 
@@ -57,6 +60,7 @@ namespace sigslot {
                 if (!coro) throw std::logic_error("No coroutine to start");
                 if (coro.done()) throw std::logic_error("Already run");
                 if (coro.promise().started) throw std::logic_error("Already started");
+                if (coro.promise().finished) throw std::logic_error("Already finished");
                 coro.promise().started = true;
                 coro.resume();
             }
@@ -83,20 +87,39 @@ namespace sigslot {
             }
         };
 
-        template<typename T>
-        struct awaitable {
+        struct awaitable_base {
             std::experimental::coroutine_handle<> awaiting = nullptr;
+
+            awaitable_base() = default;
+            awaitable_base(awaitable_base const & other) = default;
+            awaitable_base(awaitable_base && other) noexcept : awaiting(other.awaiting) {
+                other.awaiting = nullptr;
+            }
+            void await_suspend(std::experimental::coroutine_handle<> h) {
+                // The awaiting coroutine is already suspended.
+                awaiting = h;
+            }
+
+            void resolve() {
+                if (awaiting) awaiting.resume();
+            }
+
+            virtual ~awaitable_base() = default;
+        };
+
+        template<typename T>
+        struct awaitable : public awaitable_base {
             sigslot::tasklet<T> const &task;
 
-            awaitable(sigslot::tasklet<T> const &t) : task(t) {
+            awaitable(sigslot::tasklet<T> const &t) : awaitable_base(), task(t) {
                 task.coro.promise().await_add(this);
             }
 
-            awaitable(awaitable const &a) : task(a.task) {
+            awaitable(awaitable const &other) : awaitable_base(other), task(other.task) {
                 task.coro.promise().await_add(this);
             }
 
-            awaitable(awaitable &&other) noexcept : task(other.task) {
+            awaitable(awaitable &&other) noexcept : awaitable_base(other), task(other.task) {
                 task.coro.promise().await_add(this);
             }
 
@@ -108,17 +131,8 @@ namespace sigslot {
                 return !task.running();
             }
 
-            void await_suspend(std::experimental::coroutine_handle<> h) {
-                // The awaiting coroutine is already suspended.
-                awaiting = h;
-            }
-
             auto await_resume() {
                 return task.get();
-            }
-
-            void resolve() {
-                if (awaiting) awaiting.resume();
             }
 
             ~awaitable() {
@@ -133,13 +147,28 @@ namespace sigslot {
             sigslot::signal<> complete;
             sigslot::signal<std::exception_ptr &> exception;
             bool started = false;
+            bool finished = false;
+            std::set<awaitable_base *> awaiters;
+
+            void await_add(awaitable_base * a) {
+                awaiters.insert(a);
+            }
+
+            void await_del(awaitable_base * a) {
+                awaiters.erase(a);
+            }
 
             void set_name(std::string const &s) {
                 name = s;
             }
 
             auto final_suspend() {
+                finished = true;
                 complete();
+                auto all_awaiters = std::move(awaiters); // Move to keep it on the stack.
+                for (auto awaiter : all_awaiters) {
+                    awaiter->resolve();
+                }
                 return std::experimental::suspend_always{};
             }
 
@@ -167,18 +196,9 @@ namespace sigslot {
         template<typename R, typename T>
         struct promise_type : public promise_type_base {
             T value;
-            std::set<awaitable<T> *> awaiters;
             typedef std::experimental::coroutine_handle<promise_type<R, T>> handle_type;
 
             promise_type() : value() {}
-
-            void await_add(awaitable<T> * a) {
-                awaiters.insert(a);
-            }
-
-            void await_del(awaitable<T> * a) {
-                awaiters.erase(a);
-            }
 
             auto get_return_object() {
                 return R{handle_type::from_promise(*this)};
@@ -198,15 +218,6 @@ namespace sigslot {
         template<typename R>
         struct promise_type<R, void> : public promise_type_base {
             typedef std::experimental::coroutine_handle<promise_type<R, void>> handle_type;
-            std::set<awaitable<void> *> awaiters;
-
-            void await_add(awaitable<void> * a) {
-                awaiters.insert(a);
-            }
-
-            void await_del(awaitable<void> * a) {
-                awaiters.erase(a);
-            }
 
             auto get_return_object() {
                 return R{handle_type::from_promise(*this)};
