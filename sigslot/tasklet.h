@@ -39,12 +39,22 @@ namespace sigslot {
             }
 
             auto get() const {
+                if (!coro.promise().started) {
+                    // Never started, so start now.
+                    const_cast<tasklet *>(this)->start();
+                }
                 return coro.promise().get();
+            }
+
+            bool started() const {
+                return coro.promise().started;
             }
 
             void start() {
                 if (!coro) throw std::logic_error("No coroutine to start");
                 if (coro.done()) throw std::logic_error("Already run");
+                if (coro.promise().started) throw std::logic_error("Already started");
+                coro.promise().started = true;
                 coro.resume();
             }
 
@@ -76,6 +86,7 @@ namespace sigslot {
             std::exception_ptr eptr;
             sigslot::signal<> complete;
             sigslot::signal<std::exception_ptr &> exception;
+            bool started = false;
 
             void set_name(std::string const &s) {
                 name = s;
@@ -155,6 +166,7 @@ namespace sigslot {
     template<typename T>
     struct tasklet : public internal::tasklet<std::experimental::coroutine_handle<internal::promise_type<tasklet<T>,T>>> {
         using promise_type = internal::promise_type<tasklet<T>,T>;
+        tasklet() = delete;
         T operator*() const {
             return internal::tasklet<std::experimental::coroutine_handle<internal::promise_type<tasklet<T>,T>>>::get();
         }
@@ -163,6 +175,7 @@ namespace sigslot {
     template<>
     struct tasklet<void> : public internal::tasklet<std::experimental::coroutine_handle<internal::promise_type<tasklet<void>,void>>> {
         using promise_type = internal::promise_type<tasklet<void>,void>;
+        tasklet() = delete;
     };
 
     template<typename T>
@@ -184,6 +197,10 @@ namespace sigslot {
             }
 
             bool await_ready() {
+                if (!task.started()) {
+                    // Need to start the task
+                    const_cast<tasklet<T> &>(task).start();
+                }
                 return !task.running();
             }
 

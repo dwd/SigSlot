@@ -60,6 +60,7 @@ sigslot::tasklet<int> wrapping_coroutine() {
 sigslot::tasklet<void> throws_exception() {
     std::cout << "I shall throw an exception:" << std::endl;
     throw std::runtime_error("This is an exception.");
+    co_return; // This is unreachable, but needed since otherwise it's not a coroutine!
 }
 
 sigslot::tasklet<bool> catch_exceptions() {
@@ -79,7 +80,8 @@ int main(int argc, char *argv[]) {
          */
         std::cout << "M: Executing coroutine." << std::endl;
         auto c = wrapping_coroutine();
-        c.start(); // Start the coroutine. It'll execute until it needs to await a signal, then stop and return.
+        c.start(); // Start the tasklet. It'll execute until it needs to await a signal, then stop and return.
+        // Tasklets automatically start if you get() or co_await them.
         std::cout << "M: Coroutine started, now running: " << c.running() << std::endl;
         std::cout << "M: Tick:" << std::endl;
         tick(); // When we emit the signal, it'll start executing the coroutine again. Again, it'll stop when it awaits the next signal.
