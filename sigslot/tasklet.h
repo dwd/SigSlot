@@ -20,13 +20,13 @@ namespace sigslot {
 
             tasklet(handle_type h) : coro(h) {}
 
-            tasklet(tasklet &&other) : coro(other.coro) {
+            tasklet(tasklet &&other) noexcept : coro(other.coro) {
                 other.coro = nullptr;
             }
 
             tasklet(tasklet const &other) : coro(other.coro) {}
 
-            tasklet &operator=(tasklet &&other) {
+            tasklet &operator=(tasklet &&other) noexcept {
                 coro = other.coro;
                 other.coro = nullptr;
                 return *this;
@@ -112,7 +112,7 @@ namespace sigslot {
                 }
             }
 
-            ~promise_type_base() {
+            virtual ~promise_type_base() {
                 using namespace std::string_literals;
                 name = "** Destroyed **"s;
             }
@@ -120,11 +120,7 @@ namespace sigslot {
 
         template<typename R, typename T>
         struct promise_type : public promise_type_base {
-            std::string name;
             T value;
-            std::exception_ptr eptr;
-            sigslot::signal<> complete;
-            sigslot::signal<std::exception_ptr &> exception;
             typedef std::experimental::coroutine_handle<promise_type<R, T>> handle_type;
 
             promise_type() : value() {}
@@ -146,10 +142,6 @@ namespace sigslot {
 
         template<typename R>
         struct promise_type<R, void> : public promise_type_base {
-            std::string name;
-            std::exception_ptr eptr;
-            sigslot::signal<> complete;
-            sigslot::signal<std::exception_ptr &> exception;
             typedef std::experimental::coroutine_handle<promise_type<R, void>> handle_type;
 
             auto get_return_object() {
@@ -166,15 +158,6 @@ namespace sigslot {
     template<typename T>
     struct tasklet : public internal::tasklet<std::experimental::coroutine_handle<internal::promise_type<tasklet<T>,T>>> {
         using promise_type = internal::promise_type<tasklet<T>,T>;
-        tasklet() = delete;
-        T operator*() const {
-            return internal::tasklet<std::experimental::coroutine_handle<internal::promise_type<tasklet<T>,T>>>::get();
-        }
-    };
-
-    template<>
-    struct tasklet<void> : public internal::tasklet<std::experimental::coroutine_handle<internal::promise_type<tasklet<void>,void>>> {
-        using promise_type = internal::promise_type<tasklet<void>,void>;
         tasklet() = delete;
     };
 
@@ -215,9 +198,6 @@ namespace sigslot {
 
             void resolve() {
                 if (awaiting) awaiting.resume();
-            }
-
-            ~awaitable() {
             }
         };
         return awaitable(task);
