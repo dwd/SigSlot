@@ -249,10 +249,10 @@ namespace sigslot {
                 itNext = it;
                 ++itNext;
 
-                (*it)->emit(a...);
                 if ((*it)->one_shot) {
                     (*it)->expired = true;
                 }
+                (*it)->emit(a...);
 
                 it = itNext;
             }
