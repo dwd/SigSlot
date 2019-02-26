@@ -1,64 +1,5 @@
 #include <sigslot/sigslot.h>
-
-/**
- *
- * First, some boilerplate.
- *
- * This is just a trivial coroutine type, with immediate execution.
- *
- * It's more or less a copy of the sync<> type from:
- * https://kirit.com/How%20C%2B%2B%20coroutines%20work/My%20first%20coroutine
- */
-
-template<typename T>
-struct tasklet {
-    struct promise_type;
-    using handle_type = std::experimental::coroutine_handle<promise_type>;
-    handle_type coro;
-
-    tasklet(handle_type h) : coro(h) {
-    }
-    tasklet(tasklet && other) : coro(other.coro) {
-        other.coro = nullptr;
-    }
-    tasklet &operator = (tasklet && other) {
-        coro = other.coro;
-        other.coro = nullptr;
-    }
-    tasklet(tasklet const &) = delete;
-    tasklet & operator = (tasklet const &) = delete;
-
-    ~tasklet() {
-        if (coro) coro.destroy();
-    }
-
-    T get() {
-        return coro.promise().value;
-    }
-
-    struct promise_type {
-        T value;
-        promise_type() : value() {
-        }
-        auto get_return_object() {
-            return tasklet<T>{handle_type::from_promise(*this)};
-        }
-        auto return_value(T v) {
-            value = v;
-            return std::experimental::suspend_never{};
-        }
-        auto final_suspend() {
-            return std::experimental::suspend_always{};
-        }
-        auto initial_suspend() {
-            return std::experimental::suspend_never{};
-        }
-        void unhandled_exception() {
-            std::exit(1);
-        }
-    };
-};
-
+#include <sigslot/tasklet.h>
 #include <iostream>
 #include <string>
 
@@ -75,7 +16,7 @@ sigslot::signal<int, std::string> splat;
  * All it's going to do is await the two signals - we won't do anything with it.
  */
 
-tasklet<int> coroutine_example() {
+sigslot::tasklet<int> coroutine_example() {
     std::cout << "C: Ready." << std::endl;
     /**
      * If you co_await a signal, execution stops and control moves to the caller.
@@ -92,7 +33,7 @@ tasklet<int> coroutine_example() {
      * For signals with a single argument, the argument gets returned by the
      * co_await when it completes:
      */
-    int foo = co_await tock;
+    auto foo = co_await tock;
     std::cout << "C: Got a tock of " << foo << std::endl;
     /**
      * Signals that have multiple arguments also work, but it passes back a std::tuple
@@ -106,14 +47,44 @@ tasklet<int> coroutine_example() {
     co_return foo;
 }
 
+sigslot::tasklet<int> wrapping_coroutine() {
+    auto task = coroutine_example();
+    std::cout << "W: Starting an inner coroutine." << std::endl;
+    task.start();
+    std::cout << "W: Waiting" << std::endl;
+    auto foo = co_await task;
+    std::cout << "W: Inner coroutine completed with " << foo << std::endl;
+    co_return foo;
+}
+
+sigslot::tasklet<void> throws_exception() {
+    std::cout << "I shall throw an exception:" << std::endl;
+    throw std::runtime_error("This is an exception.");
+    co_return; // This is unreachable, but needed since otherwise it's not a coroutine!
+}
+
+sigslot::tasklet<bool> catch_exceptions() {
+    try {
+        co_await throws_exception();
+        co_return false;
+    } catch(std::runtime_error & e) {
+        std::cout << "Caught: " << e.what() << std::endl;
+        co_return true;
+    }
+}
+
 int main(int argc, char *argv[]) {
     try {
         /**
          * First with the coroutine awaiting:
          */
         std::cout << "M: Executing coroutine." << std::endl;
-        auto c = coroutine_example(); // Start the coroutine. It'll execute until it needs to await a signal, then stop and return.
-        std:: cout << "M: Tick:" << std::endl;
+        auto c = wrapping_coroutine();
+        c.start(); // Start the tasklet. It'll execute until it needs to await a signal, then stop and return.
+        // Tasklets automatically start if you get() or co_await them, but
+        // if they then suspend you'll get a runtime error.
+        std::cout << "M: Coroutine started, now running: " << c.running() << std::endl;
+        std::cout << "M: Tick:" << std::endl;
         tick(); // When we emit the signal, it'll start executing the coroutine again. Again, it'll stop when it awaits the next signal.
         std::cout << "M: Tock(42):" << std::endl;
         tock(42);
@@ -124,6 +95,21 @@ int main(int argc, char *argv[]) {
          * If we sent the second signal before the first, the coroutine would wait forever.
          * This is because it wouldn't fire when the coroutine is suspended in co_await.
          */
+         auto ex = catch_exceptions();
+         ex.start();
+         if (ex.get()) {
+             std::cout << "Caught the exception properly" << std::endl;
+         } else {
+             throw std::runtime_error("Didn't catch exception!");
+         }
+         try {
+             auto ex1 = throws_exception();
+             std::cout << "Here we go." << std::endl;
+             ex1.get();
+             throw std::runtime_error("Didn't catch exception!");
+         } catch (std::runtime_error & e) {
+             std::cout << "Expected exception caught: " << e.what()  << std::endl;
+         }
     } catch (std::exception const & e) {
         std::cerr << e.what() << std::endl;
         throw;
