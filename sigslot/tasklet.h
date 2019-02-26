@@ -181,7 +181,7 @@ namespace sigslot {
                 exception(eptr);
             }
 
-            void get() const {
+            void throw_exception() const {
                 if (eptr) {
                     std::rethrow_exception(eptr);
                 }
@@ -210,7 +210,7 @@ namespace sigslot {
             }
 
             auto get() const {
-                promise_type_base::get();
+                throw_exception();
                 return value;
             }
         };
@@ -226,6 +226,10 @@ namespace sigslot {
             auto return_void() {
                 return std::experimental::suspend_never{};
             }
+
+            void get() const {
+                throw_exception();
+            }
         };
     }
 
@@ -233,7 +237,6 @@ namespace sigslot {
     template<typename T>
     struct tasklet : public internal::tasklet<std::experimental::coroutine_handle<internal::promise_type<tasklet<T>,T>>> {
         using promise_type = internal::promise_type<tasklet<T>,T>;
-        tasklet() = delete;
     };
 
     template<typename T>
