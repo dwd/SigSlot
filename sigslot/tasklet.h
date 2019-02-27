@@ -89,6 +89,7 @@ namespace sigslot {
 
         struct awaitable_base {
             std::experimental::coroutine_handle<> awaiting = nullptr;
+            bool resolved = false;
 
             awaitable_base() = default;
             awaitable_base(awaitable_base const & other) = default;
@@ -101,6 +102,7 @@ namespace sigslot {
             }
 
             void resolve() {
+                resolved = true;
                 if (awaiting) awaiting.resume();
             }
 
@@ -132,11 +134,14 @@ namespace sigslot {
             }
 
             auto await_resume() {
+                resolved = true;
                 return task.get();
             }
 
             ~awaitable() {
-                task.coro.promise().await_del(this);
+                if (!resolved) {
+                    task.coro.promise().await_del(this);
+                }
             }
         };
 
