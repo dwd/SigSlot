@@ -46,7 +46,7 @@
 namespace sigslot {
 #ifdef SIGSLOT_COROUTINES
 #ifndef SIGSLOT_RESUME_OVERRIDE
-    void resume(std::experimental::coroutine_handle<> & coro) {
+    inline void resume(std::experimental::coroutine_handle<> & coro) {
         coro.resume();
     }
 #endif
