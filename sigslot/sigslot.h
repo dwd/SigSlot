@@ -44,6 +44,13 @@
 #endif
 
 namespace sigslot {
+#ifdef SIGSLOT_COROUTINES
+#ifndef SIGSLOT_RESUME_OVERRIDE
+    void resume(std::experimental::coroutine_handle<> & coro) {
+        coro.resume();
+    }
+#endif
+#endif
 
     class has_slots;
 
@@ -328,7 +335,7 @@ namespace sigslot {
 
             void resolve(args... a) {
                 payload.emplace(a...);
-                if (awaiting) awaiting.resume();
+                if (awaiting) resume(awaiting);
             }
 
             ~awaitable() {
@@ -367,7 +374,7 @@ namespace sigslot {
 
             void resolve(T a) {
                 payload.emplace(a);
-                if (awaiting) awaiting.resume();
+                if (awaiting) resume(awaiting);
             }
 
             ~awaitable() {
@@ -406,7 +413,7 @@ namespace sigslot {
 
             void resolve(T & a) {
                 payload = &a;
-                if (awaiting) awaiting.resume();
+                if (awaiting) resume(awaiting);
             }
 
             ~awaitable() {
@@ -443,7 +450,7 @@ namespace sigslot {
 
             void resolve() {
                 ready = true;
-                if (awaiting) awaiting.resume();
+                if (awaiting) resume(awaiting);
             }
 
             ~awaitable() {
