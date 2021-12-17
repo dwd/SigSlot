@@ -6,7 +6,7 @@
 #define SIGSLOT_TASKLET_H
 
 #include <sigslot/sigslot.h>
-#include <experimental/coroutine>
+#include <coroutine>
 #include <string>
 
 namespace sigslot {
@@ -88,7 +88,7 @@ namespace sigslot {
         };
 
         struct awaitable_base {
-            std::experimental::coroutine_handle<> awaiting = nullptr;
+            std::coroutine_handle<> awaiting = nullptr;
             bool resolved = false;
 
             awaitable_base() = default;
@@ -96,7 +96,7 @@ namespace sigslot {
             awaitable_base(awaitable_base && other) noexcept : awaiting(other.awaiting) {
                 other.awaiting = nullptr;
             }
-            void await_suspend(std::experimental::coroutine_handle<> h) {
+            void await_suspend(std::coroutine_handle<> h) {
                 // The awaiting coroutine is already suspended.
                 awaiting = h;
             }
@@ -167,18 +167,18 @@ namespace sigslot {
                 name = s;
             }
 
-            auto final_suspend() {
+            auto final_suspend() noexcept {
                 finished = true;
                 complete();
                 auto all_awaiters = std::move(awaiters); // Move to keep it on the stack.
                 for (auto awaiter : all_awaiters) {
                     awaiter->resolve();
                 }
-                return std::experimental::suspend_always{};
+                return std::suspend_always{};
             }
 
             auto initial_suspend() {
-                return std::experimental::suspend_always{};
+                return std::suspend_always{};
             }
 
             void unhandled_exception() {
@@ -201,7 +201,7 @@ namespace sigslot {
         template<typename R, typename T>
         struct promise_type : public promise_type_base {
             T value;
-            typedef std::experimental::coroutine_handle<promise_type<R, T>> handle_type;
+            typedef std::coroutine_handle<promise_type<R, T>> handle_type;
 
             promise_type() : value() {}
 
@@ -211,7 +211,7 @@ namespace sigslot {
 
             auto return_value(T v) {
                 value = v;
-                return std::experimental::suspend_never{};
+                return std::suspend_never{};
             }
 
             auto get() const {
@@ -222,14 +222,14 @@ namespace sigslot {
 
         template<typename R>
         struct promise_type<R, void> : public promise_type_base {
-            typedef std::experimental::coroutine_handle<promise_type<R, void>> handle_type;
+            typedef std::coroutine_handle<promise_type<R, void>> handle_type;
 
             auto get_return_object() {
                 return R{handle_type::from_promise(*this)};
             }
 
             auto return_void() {
-                return std::experimental::suspend_never{};
+                return std::suspend_never{};
             }
 
             void get() const {
@@ -240,7 +240,7 @@ namespace sigslot {
 
 
     template<typename T>
-    struct tasklet : public internal::tasklet<std::experimental::coroutine_handle<internal::promise_type<tasklet<T>,T>>> {
+    struct tasklet : public internal::tasklet<std::coroutine_handle<internal::promise_type<tasklet<T>,T>>> {
         using promise_type = internal::promise_type<tasklet<T>,T>;
     };
 
