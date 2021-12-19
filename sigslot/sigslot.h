@@ -39,14 +39,14 @@
 #include <mutex>
 #ifdef SIGSLOT_COROUTINES
 #include <optional>
-#include <experimental/coroutine>
+#include <coroutine>
 #include <vector>
 #endif
 
 namespace sigslot {
 #ifdef SIGSLOT_COROUTINES
 #ifndef SIGSLOT_RESUME_OVERRIDE
-    inline void resume(std::experimental::coroutine_handle<> & coro) {
+    inline void resume(std::coroutine_handle<> & coro) {
         coro.resume();
     }
 #endif
@@ -306,8 +306,8 @@ namespace sigslot {
         // Generic variant uses a tuple to pass back.
         template<class... args>
         struct awaitable {
-            signal<args...> & signal;
-            std::experimental::coroutine_handle<> awaiting = nullptr;
+            ::sigslot::signal<args...> & signal;
+            std::coroutine_handle<> awaiting = nullptr;
             std::optional<std::tuple<args...>> payload;
 
             explicit awaitable(::sigslot::signal<args...> & s) : signal(s) {
@@ -324,7 +324,7 @@ namespace sigslot {
                 return payload.has_value();
             }
 
-            void await_suspend(std::experimental::coroutine_handle<> h) {
+            void await_suspend(std::coroutine_handle<> h) {
                 // The awaiting coroutine is already suspended.
                 awaiting = h;
             }
@@ -346,8 +346,8 @@ namespace sigslot {
         // Single argument version uses a bare T
         template<typename T>
         struct awaitable<T> {
-            signal<T> & signal;
-            std::experimental::coroutine_handle<> awaiting = nullptr;
+            ::sigslot::signal<T> & signal;
+            std::coroutine_handle<> awaiting = nullptr;
             std::optional<T> payload;
             explicit awaitable(::sigslot::signal<T> & s) : signal(s) {
                 signal.await_(this);
@@ -363,7 +363,7 @@ namespace sigslot {
                 return payload.has_value();
             }
 
-            void await_suspend(std::experimental::coroutine_handle<> h) {
+            void await_suspend(std::coroutine_handle<> h) {
                 // The awaiting coroutine is already suspended.
                 awaiting = h;
             }
@@ -385,8 +385,8 @@ namespace sigslot {
         // Single argument reference version uses a bare T &
         template<typename T>
         struct awaitable<T&> {
-            signal<T&> & signal;
-            std::experimental::coroutine_handle<> awaiting = nullptr;
+            ::sigslot::signal<T&> & signal;
+            std::coroutine_handle<> awaiting = nullptr;
             T *payload = nullptr;
             explicit awaitable(::sigslot::signal<T&> & s) : signal(s) {
                 signal.await_(this);
@@ -402,7 +402,7 @@ namespace sigslot {
                 return payload;
             }
 
-            void await_suspend(std::experimental::coroutine_handle<> h) {
+            void await_suspend(std::coroutine_handle<> h) {
                 // The awaiting coroutine is already suspended.
                 awaiting = h;
             }
@@ -424,8 +424,8 @@ namespace sigslot {
         // Zero argument version uses nothing, of course.
         template<>
         struct awaitable<> {
-            signal<> & signal;
-            std::experimental::coroutine_handle<> awaiting = nullptr;
+            ::sigslot::signal<> & signal;
+            std::coroutine_handle<> awaiting = nullptr;
             bool ready = false;
             explicit awaitable(::sigslot::signal<> & s) : signal(s) {
                 signal.await_(this);
@@ -441,7 +441,7 @@ namespace sigslot {
                 return ready;
             }
 
-            void await_suspend(std::experimental::coroutine_handle<> h) {
+            void await_suspend(std::coroutine_handle<> h) {
                 // The awaiting coroutine is already suspended.
                 awaiting = h;
             }
