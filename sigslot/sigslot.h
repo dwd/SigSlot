@@ -60,6 +60,7 @@ namespace sigslot {
             std::recursive_mutex m_barrier;
         public:
             virtual void slot_disconnect(has_slots *pslot) = 0;
+            virtual ~_signal_base_lo() = default;
         };
     }
 
@@ -68,7 +69,6 @@ namespace sigslot {
     {
     private:
         std::recursive_mutex m_barrier;
-        typedef typename std::set<internal::_signal_base_lo *> sender_set;
 
     public:
         has_slots() = default;
@@ -78,13 +78,13 @@ namespace sigslot {
 
         void signal_connect(internal::_signal_base_lo* sender)
         {
-            std::lock_guard<std::recursive_mutex> lock(m_barrier);
+            std::scoped_lock lock(m_barrier);
             m_senders.insert(sender);
         }
 
         void signal_disconnect(internal::_signal_base_lo* sender)
         {
-            std::lock_guard<std::recursive_mutex> lock(m_barrier);
+            std::scoped_lock lock(m_barrier);
             m_senders.erase(sender);
         }
 
@@ -95,7 +95,7 @@ namespace sigslot {
 
         void disconnect_all()
         {
-            std::lock_guard<std::recursive_mutex> lock(m_barrier);
+            std::scoped_lock lock(m_barrier);
             for (auto i : m_senders) {
                 i->slot_disconnect(this);
             }
@@ -104,7 +104,7 @@ namespace sigslot {
         }
 
     private:
-        sender_set m_senders;
+        std::set<internal::_signal_base_lo *>  m_senders;
     };
 
     namespace internal {
@@ -120,7 +120,7 @@ namespace sigslot {
                 m_fn(a...);
             }
 
-            has_slots* getdest() const
+            [[nodiscard]] has_slots* getdest() const
             {
                 return m_pobject;
             }
@@ -136,14 +136,12 @@ namespace sigslot {
         class _signal_base : public _signal_base_lo
         {
         public:
-            typedef typename std::list<_connection<args...> *>  connections_list;
-
             _signal_base() = default;
 
             _signal_base(const _signal_base& s)
                     : _signal_base_lo(s), m_connected_slots()
             {
-                std::lock_guard<std::recursive_mutex> lock(m_barrier);
+                std::scoped_lock lock(m_barrier);
                 for (auto i : s.m_connected_slots) {
                     i->getdest()->signal_connect(this);
                     m_connected_slots.push_back(i->clone());
@@ -152,14 +150,14 @@ namespace sigslot {
 
             _signal_base(_signal_base &&) = delete;
 
-            ~_signal_base()
+            virtual ~_signal_base()
             {
                 disconnect_all();
             }
 
             void disconnect_all()
             {
-                std::lock_guard<std::recursive_mutex> lock(m_barrier);
+                std::scoped_lock lock(m_barrier);
                 for (auto i : m_connected_slots) {
                     i->getdest()->signal_disconnect(this);
                     delete i;
@@ -169,7 +167,7 @@ namespace sigslot {
 
             void disconnect(has_slots* pclass)
             {
-                std::lock_guard<std::recursive_mutex> lock(m_barrier);
+                std::scoped_lock lock(m_barrier);
                 bool found{false};
                 m_connected_slots.remove_if([pclass, &found](_connection<args...> * x) {
                     if (x->getdest() == pclass) {
@@ -184,7 +182,7 @@ namespace sigslot {
 
             void slot_disconnect(has_slots* pslot) final
             {
-                std::lock_guard<std::recursive_mutex> lock(m_barrier);
+                std::scoped_lock lock(m_barrier);
                 m_connected_slots.remove_if(
                     [pslot](_connection<args...> * x) {
                         if (x->getdest() == pslot) {
@@ -197,7 +195,7 @@ namespace sigslot {
             }
 
         protected:
-            connections_list m_connected_slots;
+            std::list<_connection<args...> *>  m_connected_slots;
         };
 
     }
@@ -214,17 +212,15 @@ namespace sigslot {
     class signal : public internal::_signal_base<args...>
     {
     public:
-        typedef typename internal::_signal_base<args...>::connections_list::const_iterator const_iterator;
-
         signal() = default;
 
         signal(const signal<args...>& s) = default;
 
         void connect(has_slots *pclass, std::function<void(args...)> &&fn, bool one_shot = false)
         {
-            std::lock_guard<std::recursive_mutex> lock{internal::_signal_base<args...>::m_barrier};
+            std::scoped_lock lock{internal::_signal_base<args...>::m_barrier};
             auto *conn = new internal::_connection<args...>(
-                    pclass, fn, one_shot);
+                    pclass, std::move(fn), one_shot);
             this->m_connected_slots.push_back(conn);
             pclass->signal_connect(this);
         }
@@ -247,9 +243,10 @@ namespace sigslot {
             awaitables.clear();
 #endif
 
-            std::lock_guard<std::recursive_mutex> lock{internal::_signal_base<args...>::m_barrier};
-            const_iterator itNext, it = this->m_connected_slots.begin();
-            const_iterator itEnd = this->m_connected_slots.end();
+            std::scoped_lock lock{internal::_signal_base<args...>::m_barrier};
+            auto it = this->m_connected_slots.begin();
+            auto itNext = it;
+            auto itEnd = this->m_connected_slots.end();
 
             while(it != itEnd)
             {
