@@ -8,6 +8,7 @@
 #include <sigslot/sigslot.h>
 #include <coroutine>
 #include <string>
+#include <stdexcept>
 
 namespace sigslot {
     template<typename T> struct tasklet;
@@ -103,7 +104,7 @@ namespace sigslot {
 
             void resolve() {
                 resolved = true;
-                if (awaiting) awaiting.resume();
+                if (awaiting) resume(awaiting);
             }
 
             virtual ~awaitable_base() = default;
