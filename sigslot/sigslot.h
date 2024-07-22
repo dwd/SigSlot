@@ -11,8 +11,8 @@
 //              (see also the full documentation at http://sigslot.sourceforge.net/)
 //
 //      #define switches
-//          SIGSLOT_COROUTINES:
-//          If defined, this will provide an operator co_await(), so that coroutines can
+//          SIGSLOT_NO_COROUTINES:
+//          If not defined, this will provide an operator co_await(), so that coroutines can
 //          co_await on a signal instead of registering a callback.
 //
 //      PLATFORM NOTES
@@ -37,19 +37,19 @@
 #include <list>
 #include <functional>
 #include <mutex>
-#ifdef SIGSLOT_COROUTINES
+#ifndef SIGSLOT_NO_COROUTINES
 #include <optional>
 #include <coroutine>
 #include <vector>
 #endif
 
+#include <sigslot/resume.h>
+
 namespace sigslot {
-#ifdef SIGSLOT_COROUTINES
-#ifndef SIGSLOT_RESUME_OVERRIDE
-    inline void resume(std::coroutine_handle<> & coro) {
-        coro.resume();
+#ifndef SIGSLOT_NO_COROUTINES
+    inline void resume_switch(std::coroutine_handle<>  coro) {
+        resumer<std::coroutine_handle<>>::resume(coro);
     }
-#endif
 #endif
 
     class has_slots;
@@ -201,7 +201,7 @@ namespace sigslot {
     }
 
 
-#ifdef SIGSLOT_COROUTINES
+#ifndef SIGSLOT_NO_COROUTINES
     namespace coroutines {
         template<class... args> struct awaitable;
     }
@@ -235,7 +235,7 @@ namespace sigslot {
         // This code uses the long-hand because it assumes it may mutate the list.
         void emit(args... a)
         {
-#ifdef SIGSLOT_COROUTINES
+#ifndef SIGSLOT_NO_COROUTINES
             std::set<coroutines::awaitable<args...> *> awaitables(std::move(m_awaitables));
             for (auto * awaitable : awaitables) {
                 awaitable->resolve(a...);
@@ -280,7 +280,7 @@ namespace sigslot {
             this->emit(a...);
         }
 
-#ifdef SIGSLOT_COROUTINES
+#ifndef SIGSLOT_NO_COROUTINES
         std::set<coroutines::awaitable<args...> *> m_awaitables;
 
         auto operator co_await() {
@@ -298,7 +298,7 @@ namespace sigslot {
     };
 
 
-#ifdef SIGSLOT_COROUTINES
+#ifndef SIGSLOT_NO_COROUTINES
     namespace coroutines {
         // Generic variant uses a tuple to pass back.
         template<class... args>
@@ -332,7 +332,7 @@ namespace sigslot {
 
             void resolve(args... a) {
                 payload.emplace(a...);
-                if (awaiting) resume(awaiting);
+                if (awaiting) ::sigslot::resume_switch(awaiting);
             }
 
             ~awaitable() {
@@ -371,7 +371,7 @@ namespace sigslot {
 
             void resolve(T a) {
                 payload.emplace(a);
-                if (awaiting) resume(awaiting);
+                if (awaiting) ::sigslot::resume_switch(awaiting);
             }
 
             ~awaitable() {
@@ -410,7 +410,7 @@ namespace sigslot {
 
             void resolve(T & a) {
                 payload = &a;
-                if (awaiting) resume(awaiting);
+                if (awaiting) ::sigslot::resume_switch(awaiting);
             }
 
             ~awaitable() {
@@ -447,7 +447,7 @@ namespace sigslot {
 
             void resolve() {
                 ready = true;
-                if (awaiting) resume(awaiting);
+                if (awaiting) ::sigslot::resume_switch(awaiting);
             }
 
             ~awaitable() {
