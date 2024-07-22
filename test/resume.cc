@@ -7,16 +7,11 @@
 int resumptions = 0;
 
 namespace sigslot {
-    template<>
-    struct resumer<std::coroutine_handle<>> {
-        static inline void resume(std::coroutine_handle<> coro) {
-            ++resumptions;
-            coro.resume();
-        }
-    };
+    static inline void resume(std::coroutine_handle<> coro) {
+        ++resumptions;
+        coro.resume();
+    }
 }
-
-
 #include <gtest/gtest.h>
 #include <sigslot/sigslot.h>
 #include <sigslot/tasklet.h>

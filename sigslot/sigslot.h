@@ -47,8 +47,17 @@
 
 namespace sigslot {
 #ifndef SIGSLOT_NO_COROUTINES
+    template<typename R>
+    inline void resume_dispatch(std::coroutine_handle<> coro) {
+        resume(coro);
+    }
+    template<>
+    inline void resume_dispatch<coroutines::sentinel>(std::coroutine_handle<> coro) {
+        coro.resume();
+    }
     inline void resume_switch(std::coroutine_handle<>  coro) {
-        resumer<std::coroutine_handle<>>::resume(coro);
+        using return_type = decltype(resume(coro));
+        resume_dispatch<return_type>(coro);
     }
 #endif
 
