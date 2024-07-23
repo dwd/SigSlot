@@ -13,6 +13,8 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(googletest)
 
 enable_testing()
+link_libraries(GTest::gtest_main)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(sigslot-test
         test/sigslot.cc
         test/coroutine.cc
@@ -20,37 +22,27 @@ add_executable(sigslot-test
         sigslot/tasklet.h
         sigslot/resume.h
 )
-target_link_libraries(sigslot-test
-        GTest::gtest_main
-)
-target_include_directories(sigslot-test
-        PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}
-)
 add_executable(sigslot-test-resume
         sigslot/sigslot.h
         sigslot/tasklet.h
         test/resume.cc
         sigslot/resume.h
 )
-target_link_libraries(sigslot-test-resume
-        GTest::gtest_main
-)
-target_include_directories(sigslot-test-resume
-        PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}
+add_executable(sigslot-test-cothread
+        sigslot/sigslot.h
+        sigslot/tasklet.h
+        test/cothread.cc
+        sigslot/resume.h
+        sigslot/cothread.h
 )
 include(GoogleTest)
 gtest_discover_tests(sigslot-test)
 gtest_discover_tests(sigslot-test-resume)
+gtest_discover_tests(sigslot-test-cothread)
 
 if (UNIX)
-    target_compile_options(sigslot-test PUBLIC -fcoroutines)
-    target_link_options(sigslot-test PUBLIC -fcoroutines)
-    target_compile_options(sigslot-test-resume PUBLIC -fcoroutines)
-    target_link_options(sigslot-test-resume PUBLIC -fcoroutines)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
 endif ()
 if (WIN32)
-    target_compile_options(sigslot-test-resume PUBLIC /await)
-    target_compile_options(sigslot-test PUBLIC /await)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /await")
 endif()
