@@ -1,17 +1,48 @@
 cmake_minimum_required(VERSION 3.13)
 project(sigslot)
 
-set (CMAKE_CXX_STANDARD 20)
+# GoogleTest requires at least C++14, coroutines need C++20
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-include_directories(.)
-add_executable(example example.cc sigslot/sigslot.h)
+include(FetchContent)
+FetchContent_Declare(
+        googletest
+        URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+)
+FetchContent_MakeAvailable(googletest)
 
-add_executable(co_example co_example.cc sigslot/sigslot.h)
+enable_testing()
+link_libraries(GTest::gtest_main)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(sigslot-test
+        test/sigslot.cc
+        test/coroutine.cc
+        sigslot/sigslot.h
+        sigslot/tasklet.h
+        sigslot/resume.h
+)
+add_executable(sigslot-test-resume
+        sigslot/sigslot.h
+        sigslot/tasklet.h
+        test/resume.cc
+        sigslot/resume.h
+)
+add_executable(sigslot-test-cothread
+        sigslot/sigslot.h
+        sigslot/tasklet.h
+        test/cothread.cc
+        sigslot/resume.h
+        sigslot/cothread.h
+)
+include(GoogleTest)
+gtest_discover_tests(sigslot-test)
+gtest_discover_tests(sigslot-test-resume)
+gtest_discover_tests(sigslot-test-cothread)
+
 if (UNIX)
-    target_compile_options(co_example PUBLIC -fcoroutines)
-    target_link_options(co_example PUBLIC -fcoroutines)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
 endif ()
 if (WIN32)
-    target_compile_options(co_example PUBLIC /await)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /await")
 endif()
-target_compile_definitions(co_example PUBLIC -DSIGSLOT_COROUTINES)

@@ -104,7 +104,7 @@ namespace sigslot {
 
             void resolve() {
                 resolved = true;
-                if (awaiting) resume(awaiting);
+                if (awaiting) ::sigslot::resume_switch(awaiting);
             }
 
             virtual ~awaitable_base() = default;
@@ -243,6 +243,7 @@ namespace sigslot {
     template<typename T>
     struct tasklet : public internal::tasklet<std::coroutine_handle<internal::promise_type<tasklet<T>,T>>> {
         using promise_type = internal::promise_type<tasklet<T>,T>;
+        using value_type = T;
     };
 
     template<typename T>
