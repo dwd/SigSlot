@@ -236,9 +236,17 @@ namespace sigslot {
         
         // Helper for ptr-to-member; call the member function "normally".
         template<class desttype>
+        requires std::derived_from<desttype, has_slots>
         void connect(desttype *pclass, void (desttype::* memfn)(args...), bool one_shot = false)
         {
             this->connect(pclass, [pclass, memfn](args... a) { (pclass->*memfn)(a...); }, one_shot);
+        }
+
+        [[nodiscard]] std::unique_ptr<has_slots> connect(std::function<void(args...)> && fn, bool one_shot=false)
+        {
+            auto raii = std::make_unique<has_slots>();
+            this->connect(raii.get(), std::move(fn), one_shot);
+            return raii;
         }
 
         // This code uses the long-hand because it assumes it may mutate the list.

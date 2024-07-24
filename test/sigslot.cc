@@ -99,4 +99,22 @@ TEST(Simple, test_void_oneshot) {
     EXPECT_FALSE(sink.result);
 }
 
-
+TEST(Simple, test_raii_slot) {
+    Sink<void> sink;
+    EXPECT_FALSE(sink.result);
+    sigslot::signal<> signal;
+    {
+        auto scope_slot = signal.connect([&sink]() {
+            sink.slot();
+        });
+        signal();
+        EXPECT_TRUE(sink.result);
+        sink.reset();
+        EXPECT_FALSE(sink.result);
+        signal();
+        EXPECT_TRUE(sink.result);
+    }
+    sink.reset();
+    signal();
+    EXPECT_FALSE(sink.result);
+}

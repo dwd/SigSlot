@@ -54,11 +54,11 @@ void run_until_complete<void>(sigslot::tasklet<void> & coro) {
 
 sigslot::tasklet<bool> inner(std::string const & s) {
     std::cout << "Here!" << std::endl;
-    sigslot::co_thread<bool, std::string const &> thread1([](std::string const &s) {
+    sigslot::co_thread thread1([](std::string const &s) {
         std::cout << "There 1! " << s << std::endl;
         return true;
     });
-    sigslot::co_thread<bool> thread2([]() {
+    sigslot::co_thread thread2([]() {
         std::cout << "+ Launch" << std::endl;
         sleep(1);
         std::cout << "+ There 2!" << std::endl;
@@ -67,10 +67,10 @@ sigslot::tasklet<bool> inner(std::string const & s) {
         return true;
     });
     std::cout << "Still here!" << std::endl;
-    thread2();
+    auto thread2_await = thread2();
     auto result1 = co_await thread1(s);
     std::cout << "Got result1:" << result1 << std::endl;
-    auto result2 = co_await thread2;
+    auto result2 = co_await thread2_await;
     std::cout << "Got result2:" << result2 << std::endl;
     co_return true;
 }
@@ -92,15 +92,15 @@ namespace {
 
     sigslot::tasklet<int> signal_thread_task() {
         sigslot::signal<int> signal;
-        sigslot::co_thread<int> thread([&signal]() {
+        sigslot::co_thread thread([&signal]() {
            sleep(1);
            signal(42);
            sleep(1);
            return 42;
         });
-        thread();
+        auto thread_result = thread();
         auto result = co_await signal;
-        co_await thread;
+        co_await thread_result;
         co_return result;
     }
 
@@ -114,6 +114,11 @@ namespace {
             throw std::runtime_error("Help");
         }
         co_return i;
+    }
+
+    sigslot::tasklet<void> thread_exception_task() {
+        sigslot::co_thread t([]{throw std::runtime_error("Potato!");});
+        co_await t();
     }
 }
 
@@ -154,21 +159,16 @@ TEST(CoThreadTest, CheckLoop2) {
 TEST(CoThreadTest, Tests) {
     std::cout << "Start" << std::endl;
     auto coro = start();
-    coro.start();
-    while (coro.running()) {
-        std::vector<std::coroutine_handle<>> current;
-        {
-            std::lock_guard l(lock_me);
-            current.swap(resume_me);
-        }
-        std::cout << "Resuming " << current.size() << " coroutines." << std::endl;
-        for (auto coro : current) {
-            coro.resume();
-        }
-        current.clear();
-        sleep(1);
-        std::cout << "... tick" << std::endl;
-    }
-    coro.get();
+    run_until_complete(coro);
+    std::cout << "*** END ***" << std::endl;
+}
+
+TEST(CoThreadTest, Exception) {
+    std::cout << "Start" << std::endl;
+    auto coro = thread_exception_task();
+    EXPECT_THROW(
+    run_until_complete(coro),
+    std::runtime_error
+    );
     std::cout << "*** END ***" << std::endl;
 }
