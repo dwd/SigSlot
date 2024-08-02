@@ -13,6 +13,17 @@
 namespace sigslot {
     template<typename T> struct tasklet;
 
+    struct tracker {
+        virtual void terminate() const {}
+        virtual void exception(std::exception_ptr eptr) const {}
+        virtual ~tracker() {}
+    };
+    template<typename T, typename ...Args>
+    requires std::is_base_of_v<tracker, T>
+    std::shared_ptr<T> track(Args&&... args) {
+        return std::make_shared<T>(std::forward<Args>(args)...);
+    }
+
     namespace internal {
         template<typename T> struct awaitable;
 
@@ -155,6 +166,11 @@ namespace sigslot {
             bool started = false;
             bool finished = false;
             std::set<awaitable_base *> awaiters;
+            std::shared_ptr<tracker> track;
+
+            promise_type_base() {}
+            template<typename Tracker>
+            promise_type_base(std::shared_ptr<Tracker> const & t) : track(t) {}
 
             void await_add(awaitable_base * a) {
                 awaiters.insert(a);
@@ -171,6 +187,10 @@ namespace sigslot {
             auto final_suspend() noexcept {
                 finished = true;
                 complete();
+                if (track) {
+                    track->terminate();
+                    track = nullptr;
+                }
                 auto all_awaiters = std::move(awaiters); // Move to keep it on the stack.
                 for (auto awaiter : all_awaiters) {
                     awaiter->resolve();
@@ -184,6 +204,10 @@ namespace sigslot {
 
             void unhandled_exception() {
                 eptr = std::current_exception();
+                if (track) {
+                    track->exception(eptr);
+                    track = nullptr;
+                }
                 exception(eptr);
             }
 
@@ -194,6 +218,9 @@ namespace sigslot {
             }
 
             virtual ~promise_type_base() {
+                if (track) {
+                    track->terminate();
+                }
                 using namespace std::string_literals;
                 name = "** Destroyed **"s;
             }
@@ -205,6 +232,10 @@ namespace sigslot {
             typedef std::coroutine_handle<promise_type<R, T>> handle_type;
 
             promise_type() : value() {}
+
+            template<typename Tracker, typename ...Args>
+            requires std::is_base_of_v<tracker,Tracker>
+            promise_type(std::shared_ptr<Tracker> const & t, Args... args) : promise_type_base(t), value() {}
 
             auto get_return_object() {
                 return R{handle_type::from_promise(*this)};
@@ -224,6 +255,10 @@ namespace sigslot {
         template<typename R>
         struct promise_type<R, void> : public promise_type_base {
             typedef std::coroutine_handle<promise_type<R, void>> handle_type;
+
+            template<typename Tracker, typename ...Args>
+            requires std::is_base_of_v<tracker,Tracker>
+            promise_type(std::shared_ptr<Tracker> const & t, Args... args) : promise_type_base(t) {}
 
             auto get_return_object() {
                 return R{handle_type::from_promise(*this)};

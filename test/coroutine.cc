@@ -11,6 +11,25 @@ namespace {
         co_return i;
     }
 
+    struct trivial_flag {
+        bool flag;
+        trivial_flag(bool f) : flag(f) {}
+        trivial_flag(trivial_flag const &) = delete;
+    };
+    struct trivial : sigslot::tracker {
+        trivial_flag & flag;
+        explicit trivial(trivial_flag & f) : flag(f) {
+            flag.flag = false;
+        }
+        void terminate() const override {
+            flag.flag = true;
+        }
+    };
+
+    sigslot::tasklet<int> tracked_task(std::shared_ptr<trivial> &&, int i) {
+        co_return i;
+    }
+
     sigslot::tasklet<int> basic_task(sigslot::signal<int> &signal) {
         co_return co_await signal;
     }
@@ -75,3 +94,16 @@ TEST(Tasklet, Throw) {
     EXPECT_TRUE(coro.started());
 }
 
+TEST(Tracker, Simple) {
+    trivial_flag flag = {true};
+    EXPECT_TRUE(flag.flag);
+    auto coro = tracked_task(sigslot::track<trivial>(flag), 42);
+    EXPECT_TRUE(coro.running());
+    EXPECT_FALSE(flag.flag);
+    EXPECT_FALSE(coro.started());
+    auto result = coro.get();
+    EXPECT_FALSE(coro.running());
+    EXPECT_TRUE(coro.started());
+    EXPECT_TRUE(flag.flag);
+    EXPECT_EQ(result, 42);
+}
