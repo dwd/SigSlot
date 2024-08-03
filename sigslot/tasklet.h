@@ -242,6 +242,10 @@ namespace sigslot {
             }
 
             auto return_value(T v) {
+                if (track) {
+                    track->terminate();
+                    track = nullptr;
+                }
                 value = v;
                 return std::suspend_never{};
             }
@@ -267,6 +271,10 @@ namespace sigslot {
             }
 
             auto return_void() {
+                if (track) {
+                    track->terminate();
+                    track = nullptr;
+                }
                 return std::suspend_never{};
             }
 
