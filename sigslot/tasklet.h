@@ -235,7 +235,7 @@ namespace sigslot {
 
             template<typename Tracker, typename ...Args>
             requires std::is_base_of_v<tracker,Tracker>
-            promise_type(std::shared_ptr<Tracker> const & t, Args... args) : promise_type_base(t), value() {}
+            promise_type(std::shared_ptr<Tracker> const & t, Args&&...) : promise_type_base(t), value() {}
 
             auto get_return_object() {
                 return R{handle_type::from_promise(*this)};
@@ -258,7 +258,9 @@ namespace sigslot {
 
             template<typename Tracker, typename ...Args>
             requires std::is_base_of_v<tracker,Tracker>
-            promise_type(std::shared_ptr<Tracker> const & t, Args... args) : promise_type_base(t) {}
+            promise_type(std::shared_ptr<Tracker> const & t, Args&&...) : promise_type_base(t) {}
+
+            promise_type() {}
 
             auto get_return_object() {
                 return R{handle_type::from_promise(*this)};
