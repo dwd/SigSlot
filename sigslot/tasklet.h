@@ -15,7 +15,7 @@ namespace sigslot {
 
     struct tracker {
         virtual void terminate() {}
-        virtual void exception(std::exception_ptr eptr) {}
+        virtual void exception(std::exception_ptr const & eptr) {}
         virtual ~tracker() {}
     };
     template<typename T, typename ...Args>
