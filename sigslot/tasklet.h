@@ -63,6 +63,25 @@ namespace sigslot {
                 }
                 return coro.promise().get();
             }
+            void await_suspend(std::coroutine_handle<> h) const {
+                // The awaiting coroutine is already suspended.
+                if (coro.promise().awaiting) throw std::logic_error("Already an awaiter for this task");
+                coro.promise().awaiting = h;
+            }
+            bool await_ready() const {
+                if (!coro.promise().started) {
+                    // Never started, so start now.
+                    const_cast<tasklet *>(this)->start();
+                }
+                return coro.promise().finished;
+            }
+            auto await_resume() const {
+                return get();
+            }
+            auto const & operator co_await() const {
+                return *this;
+            }
+
 
             bool started() const {
                 return coro.promise().started;
@@ -99,65 +118,6 @@ namespace sigslot {
             }
         };
 
-        struct awaitable_base {
-            std::coroutine_handle<> awaiting = nullptr;
-            bool resolved = false;
-
-            awaitable_base() = default;
-            awaitable_base(awaitable_base const & other) = default;
-            awaitable_base(awaitable_base && other) noexcept : awaiting(other.awaiting) {
-                other.awaiting = nullptr;
-            }
-            void await_suspend(std::coroutine_handle<> h) {
-                // The awaiting coroutine is already suspended.
-                awaiting = h;
-            }
-
-            void resolve() {
-                resolved = true;
-                if (awaiting) ::sigslot::resume_switch(awaiting);
-            }
-
-            virtual ~awaitable_base() = default;
-        };
-
-        template<typename T>
-        struct awaitable : public awaitable_base {
-            sigslot::tasklet<T> const &task;
-
-            awaitable(sigslot::tasklet<T> const &t) : awaitable_base(), task(t) {
-                task.coro.promise().await_add(this);
-            }
-
-            awaitable(awaitable const &other) : awaitable_base(other), task(other.task) {
-                task.coro.promise().await_add(this);
-            }
-
-            awaitable(awaitable &&other) noexcept : awaitable_base(other), task(other.task) {
-                task.coro.promise().await_add(this);
-            }
-
-            bool await_ready() {
-                if (!task.started()) {
-                    // Need to start the task
-                    const_cast<sigslot::tasklet<T> &>(task).start();
-                }
-                return !task.running();
-            }
-
-            auto await_resume() {
-                resolved = true;
-                return task.get();
-            }
-
-            ~awaitable() {
-                if (!resolved) {
-                    task.coro.promise().await_del(this);
-                }
-            }
-        };
-
-
         struct promise_type_base {
             std::string name;
             std::exception_ptr eptr;
@@ -165,20 +125,12 @@ namespace sigslot {
             sigslot::signal<std::exception_ptr &> exception;
             bool started = false;
             bool finished = false;
-            std::set<awaitable_base *> awaiters;
+            std::coroutine_handle<> awaiting;
             std::shared_ptr<tracker> track;
 
             promise_type_base() {}
             template<typename Tracker>
             promise_type_base(std::shared_ptr<Tracker> const & t) : track(t) {}
-
-            void await_add(awaitable_base * a) {
-                awaiters.insert(a);
-            }
-
-            void await_del(awaitable_base * a) {
-                awaiters.erase(a);
-            }
 
             void set_name(std::string const &s) {
                 name = s;
@@ -191,10 +143,7 @@ namespace sigslot {
                     track->terminate();
                     track = nullptr;
                 }
-                auto all_awaiters = std::move(awaiters); // Move to keep it on the stack.
-                for (auto awaiter : all_awaiters) {
-                    awaiter->resolve();
-                }
+                if (awaiting) ::sigslot::resume_switch(awaiting);
                 return std::suspend_always{};
             }
 
@@ -290,11 +239,6 @@ namespace sigslot {
         using promise_type = internal::promise_type<tasklet<T>,T>;
         using value_type = T;
     };
-
-    template<typename T>
-    auto operator co_await(tasklet<T> const &task) {
-        return internal::awaitable<T>(task);
-    }
 }
 
 #endif //SIGSLOT_TASKLET_H
