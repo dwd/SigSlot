@@ -59,6 +59,26 @@ namespace sigslot {
         using return_type = decltype(resume(coro));
         resume_dispatch<return_type>(coro);
     }
+    template<typename R>
+    inline void register_dispatch(std::coroutine_handle<> coro) {
+        register_coro(coro);
+    }
+    template<>
+    inline void register_dispatch<coroutines::sentinel>(std::coroutine_handle<>) {}
+    inline void register_switch(std::coroutine_handle<>  coro) {
+        using return_type = decltype(register_coro(coro));
+        register_dispatch<return_type>(coro);
+    }
+    template<typename R>
+    inline void deregister_dispatch(std::coroutine_handle<> coro) {
+        register_coro(coro);
+    }
+    template<>
+    inline void deregister_dispatch<coroutines::sentinel>(std::coroutine_handle<>) {}
+    inline void deregister_switch(std::coroutine_handle<>  coro) {
+        using return_type = decltype(deregister_coro(coro));
+        deregister_dispatch<return_type>(coro);
+    }
 #endif
 
     class has_slots;
@@ -252,14 +272,6 @@ namespace sigslot {
         // This code uses the long-hand because it assumes it may mutate the list.
         void emit(args... a)
         {
-#ifndef SIGSLOT_NO_COROUTINES
-            std::set<coroutines::awaitable<args...> *> awaitables(std::move(m_awaitables));
-            for (auto * awaitable : awaitables) {
-                awaitable->resolve(a...);
-            }
-            awaitables.clear();
-#endif
-
             std::scoped_lock lock{internal::_signal_base<args...>::m_barrier};
             auto it = this->m_connected_slots.begin();
             auto itNext = it;
@@ -298,18 +310,8 @@ namespace sigslot {
         }
 
 #ifndef SIGSLOT_NO_COROUTINES
-        std::set<coroutines::awaitable<args...> *> m_awaitables;
-
         auto operator co_await() {
             return coroutines::awaitable<args...>(*this);
-        }
-
-        void await_(coroutines::awaitable<args...> *awaitable) {
-            m_awaitables.insert(awaitable);
-        }
-
-        void unawait(coroutines::awaitable<args...> * awaitable) {
-            m_awaitables.erase(awaitable);
         }
 #endif
     };
@@ -318,20 +320,20 @@ namespace sigslot {
 #ifndef SIGSLOT_NO_COROUTINES
     namespace coroutines {
         // Generic variant uses a tuple to pass back.
-        template<class... args>
-        struct awaitable {
-            ::sigslot::signal<args...> & signal;
+        template<typename... Args>
+        struct awaitable : public has_slots {
+            ::sigslot::signal<Args...> & signal;
             std::coroutine_handle<> awaiting = nullptr;
-            std::optional<std::tuple<args...>> payload;
+            std::optional<std::tuple<Args...>> payload;
 
-            explicit awaitable(::sigslot::signal<args...> & s) : signal(s) {
-                signal.await_(this);
+            explicit awaitable(::sigslot::signal<Args...> & s) : signal(s) {
+                signal.connect(this, &awaitable::resolve);
             }
             awaitable(awaitable const & a) : signal(a.signal), payload(a.payload) {
-                signal.await_(this);
+                signal.connect(this, &awaitable::resolve);
             }
             awaitable(awaitable && other) noexcept : signal(other.signal), payload(std::move(other.payload)) {
-                signal.await_(this);
+                signal.connect(this, &awaitable::resolve);
             }
 
             bool await_ready() {
@@ -347,30 +349,26 @@ namespace sigslot {
                 return *payload;
             }
 
-            void resolve(args... a) {
+            void resolve(Args... a) {
                 payload.emplace(a...);
                 if (awaiting) ::sigslot::resume_switch(awaiting);
-            }
-
-            ~awaitable() {
-                signal.unawait(this);
             }
         };
 
         // Single argument version uses a bare T
         template<typename T>
-        struct awaitable<T> {
+        struct awaitable<T> : public has_slots {
             ::sigslot::signal<T> & signal;
             std::coroutine_handle<> awaiting = nullptr;
             std::optional<T> payload;
             explicit awaitable(::sigslot::signal<T> & s) : signal(s) {
-                signal.await_(this);
+                signal.connect(this, &awaitable::resolve);
             }
             awaitable(awaitable const & a) : signal(a.signal), payload(a.payload) {
-                signal.await_(this);
+                signal.connect(this, &awaitable::resolve);
             }
             awaitable(awaitable && other) noexcept : signal(other.signal), payload(std::move(other.payload)) {
-                signal.await_(this);
+                signal.connect(this, &awaitable::resolve);
             }
 
             bool await_ready() {
@@ -390,26 +388,22 @@ namespace sigslot {
                 payload.emplace(a);
                 if (awaiting) ::sigslot::resume_switch(awaiting);
             }
-
-            ~awaitable() {
-                signal.unawait(this);
-            }
         };
 
         // Single argument reference version uses a bare T &
         template<typename T>
-        struct awaitable<T&> {
+        struct awaitable<T&> : public has_slots {
             ::sigslot::signal<T&> & signal;
             std::coroutine_handle<> awaiting = nullptr;
             T *payload = nullptr;
             explicit awaitable(::sigslot::signal<T&> & s) : signal(s) {
-                signal.await_(this);
+                signal.connect(this, &awaitable::resolve);
             }
             awaitable(awaitable const & a) : signal(a.signal), payload(a.payload) {
-                signal.await_(this);
+                signal.connect(this, &awaitable::resolve);
             }
             awaitable(awaitable && other) noexcept : signal(other.signal), payload(std::move(other.payload)) {
-                signal.await_(this);
+                signal.connect(this, &awaitable::resolve);
             }
 
             bool await_ready() {
@@ -429,26 +423,22 @@ namespace sigslot {
                 payload = &a;
                 if (awaiting) ::sigslot::resume_switch(awaiting);
             }
-
-            ~awaitable() {
-                signal.unawait(this);
-            }
         };
 
         // Zero argument version uses nothing, of course.
         template<>
-        struct awaitable<> {
+        struct awaitable<> : public has_slots {
             ::sigslot::signal<> & signal;
             std::coroutine_handle<> awaiting = nullptr;
             bool ready = false;
             explicit awaitable(::sigslot::signal<> & s) : signal(s) {
-                signal.await_(this);
+                signal.connect(this, &awaitable::resolve);
             }
             awaitable(awaitable const & a) : signal(a.signal), ready(a.ready) {
-                signal.await_(this);
+                signal.connect(this, &awaitable::resolve);
             }
             awaitable(awaitable && other) noexcept : signal(other.signal), ready(other.ready) {
-                signal.await_(this);
+                signal.connect(this, &awaitable::resolve);
             }
 
             bool await_ready() {
@@ -465,10 +455,6 @@ namespace sigslot {
             void resolve() {
                 ready = true;
                 if (awaiting) ::sigslot::resume_switch(awaiting);
-            }
-
-            ~awaitable() {
-                signal.unawait(this);
             }
         };
 

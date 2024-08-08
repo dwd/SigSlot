@@ -13,6 +13,8 @@ namespace sigslot {
         struct sentinel {};
     }
     coroutines::sentinel resume(...);
+    coroutines::sentinel register_coro(...);
+    coroutines::sentinel deregister_coro(...);
 }
 #endif
 

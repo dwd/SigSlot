@@ -25,24 +25,28 @@ namespace sigslot {
     }
 
     namespace internal {
-        template<typename T> struct awaitable;
-
         template<typename handle_type>
         struct tasklet {
             handle_type coro;
 
             explicit tasklet() : coro(nullptr) {}
 
-            tasklet(handle_type h) : coro(h) {}
+            tasklet(handle_type h) : coro(h) {
+                ::sigslot::register_switch(coro);
+            }
 
             tasklet(tasklet &&other) noexcept : coro(other.coro) {
                 other.coro = nullptr;
+                ::sigslot::register_switch(coro);
             }
 
-            tasklet(tasklet const &other) : coro(other.coro) {}
+            tasklet(tasklet const &other) : coro(other.coro) {
+                ::sigslot::register_switch(coro);
+            }
 
             tasklet &operator=(tasklet &&other) noexcept {
                 coro = other.coro;
+                ::sigslot::register_switch(coro);
                 other.coro = nullptr;
                 return *this;
             }
@@ -50,7 +54,10 @@ namespace sigslot {
             tasklet &operator=(tasklet const &) = delete;
 
             ~tasklet() {
-                if (coro) coro.destroy();
+                if (coro) {
+                    ::sigslot::deregister_switch(coro);
+                    coro.destroy();
+                }
             }
 
             auto get() const {
@@ -129,6 +136,8 @@ namespace sigslot {
             std::shared_ptr<tracker> track;
 
             promise_type_base() {}
+            promise_type_base(promise_type_base const &) = delete;
+            promise_type_base(promise_type_base &&) = delete;
             template<typename Tracker>
             promise_type_base(std::shared_ptr<Tracker> const & t) : track(t) {}
 
