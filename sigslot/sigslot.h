@@ -310,8 +310,8 @@ namespace sigslot {
         }
 
 #ifndef SIGSLOT_NO_COROUTINES
-        auto operator co_await() {
-            return coroutines::awaitable<args...>(*this);
+        auto operator co_await() const {
+            return coroutines::awaitable<args...>(const_cast<signal &>(*this));
         }
 #endif
     };
