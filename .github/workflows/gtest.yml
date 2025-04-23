@@ -51,7 +51,7 @@ jobs:
       - name: Conan Deps (Debug+Tests)
         run: conan install . -o tests=True -s build_type=Debug -s compiler.cppstd=gnu23  -b missing --version=${{ env.VERSION }}
       - name: CMake tests
-        run: cmake -B gh-build -DCMAKE_BUILD_TYPE=Debug
+        run: cmake -B gh-build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES="conan_provider.cmake"
       - name: Build Wrapper
         run: cd test && build-wrapper-linux-x86-64 --out-dir sonar-out cmake --build gh-build
       - name: Sonar Scanner
