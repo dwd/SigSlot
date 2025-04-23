@@ -1,5 +1,5 @@
 from conan import ConanFile
-from conan.tools.cmake import CMakeDeps, CMakeToolchain, CMake
+from conan.tools.cmake import CMakeDeps, CMakeToolchain, CMake, cmake_layout
 from conan.tools.files import copy
 
 class Siglot(ConanFile):
@@ -31,7 +31,7 @@ class Siglot(ConanFile):
             self.requires("sentry-native/0.7.15")
 
     def layout(self):
-        self.folders.source = "."
+        cmake_layout(self)
 
     def generate(self):
         if self.options.get_safe("tests"):

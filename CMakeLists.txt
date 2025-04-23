@@ -14,7 +14,7 @@ add_executable(sigslot-test
 )
 target_link_libraries(sigslot-test PUBLIC GTest::gtest sentry-native::sentry-native)
 target_include_directories(sigslot-test SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_compile_definitions(sigslot-test DWD_GTEST_SENTRY=1)
+target_compile_definitions(sigslot-test PRIVATE DWD_GTEST_SENTRY=1)
 include(GoogleTest)
 gtest_discover_tests(sigslot-test)
 
