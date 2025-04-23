@@ -31,7 +31,10 @@ class Siglot(ConanFile):
             self.requires("sentry-native/0.7.15")
 
     def layout(self):
-        cmake_layout(self)
+        if self.options.tests:
+            cmake_layout(self)
+        else:
+            self.folders.source = '.'
 
     def generate(self):
         if self.options.get_safe("tests"):
