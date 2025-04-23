@@ -12,7 +12,7 @@ add_executable(sigslot-test
         test/sigslot.cc
         test/main.cpp
 )
-target_link_libraries(sigslot-test PUBLIC GTest::gtest sentry-native::sentry-native)
+target_link_libraries(sigslot-test PUBLIC gtest::gtest sentry-native::sentry-native)
 target_include_directories(sigslot-test SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(sigslot-test PRIVATE DWD_GTEST_SENTRY=1)
 include(GoogleTest)
