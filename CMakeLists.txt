@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.13)
 project(sigslot)
 
+# Include the Conan toolchain
+include(${CMAKE_CURRENT_SOURCE_DIR}/conan_toolchain.cmake)
+
 # GoogleTest requires at least C++14, coroutines need C++20
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
