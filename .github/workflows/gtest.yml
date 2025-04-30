@@ -53,14 +53,14 @@ jobs:
       - name: CMake tests
         run: cmake -B gh-build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES="conan_provider.cmake" -DCONAN_INSTALL_ARGS="-o=tests=True;--settings=compiler.cppstd=gnu23;--build=missing;--version=1.0.1-1"
       - name: Build Wrapper
-        run: cd test && build-wrapper-linux-x86-64 --out-dir sonar-out cmake --build gh-build
+        run: build-wrapper-linux-x86-64 --out-dir sonar-out cmake --build gh-build
       - name: Sonar Scanner
-        run: cd test && sonar-scanner --define sonar.cfamily.compile-commands=sonar-out/compile_commands.json
+        run: sonar-scanner --define sonar.cfamily.compile-commands=sonar-out/compile_commands.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       - name: Run Tests
-        run: cd test/gh-build && ./sigslot-test
+        run: cd gh-build && ./sigslot-test
       - name: Create package (Debug)
         run: conan create . -s build_type=Debug -s compiler.cppstd=gnu23  -b missing --version=${{ env.VERSION }}
       - name: Create package (Release)
