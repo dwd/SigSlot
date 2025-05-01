@@ -37,50 +37,14 @@
 #include <list>
 #include <functional>
 #include <mutex>
+#include <memory>
 #ifndef SIGSLOT_NO_COROUTINES
 #include <optional>
 #include <coroutine>
 #include <vector>
 #endif
 
-#include <sigslot/resume.h>
-
 namespace sigslot {
-#ifndef SIGSLOT_NO_COROUTINES
-    template<typename R>
-    inline void resume_dispatch(std::coroutine_handle<> coro) {
-        resume(coro);
-    }
-    template<>
-    inline void resume_dispatch<coroutines::sentinel>(std::coroutine_handle<> coro) {
-        coro.resume();
-    }
-    inline void resume_switch(std::coroutine_handle<>  coro) {
-        using return_type = decltype(resume(coro));
-        resume_dispatch<return_type>(coro);
-    }
-    template<typename R>
-    inline void register_dispatch(std::coroutine_handle<> coro) {
-        register_coro(coro);
-    }
-    template<>
-    inline void register_dispatch<coroutines::sentinel>(std::coroutine_handle<>) {}
-    inline void register_switch(std::coroutine_handle<>  coro) {
-        using return_type = decltype(register_coro(coro));
-        register_dispatch<return_type>(coro);
-    }
-    template<typename R>
-    inline void deregister_dispatch(std::coroutine_handle<> coro) {
-        register_coro(coro);
-    }
-    template<>
-    inline void deregister_dispatch<coroutines::sentinel>(std::coroutine_handle<>) {}
-    inline void deregister_switch(std::coroutine_handle<>  coro) {
-        using return_type = decltype(deregister_coro(coro));
-        deregister_dispatch<return_type>(coro);
-    }
-#endif
-
     class has_slots;
 
     namespace internal {
@@ -336,7 +300,7 @@ namespace sigslot {
                 signal.connect(this, &awaitable::resolve);
             }
 
-            bool await_ready() {
+            bool await_ready() const {
                 return payload.has_value();
             }
 
@@ -345,13 +309,13 @@ namespace sigslot {
                 awaiting = h;
             }
 
-            auto await_resume() {
+            auto await_resume() const {
                 return *payload;
             }
 
             void resolve(Args... a) {
                 payload.emplace(a...);
-                if (awaiting) ::sigslot::resume_switch(awaiting);
+                if (awaiting) awaiting.resume();
             }
         };
 
@@ -371,7 +335,7 @@ namespace sigslot {
                 signal.connect(this, &awaitable::resolve);
             }
 
-            bool await_ready() {
+            bool await_ready() const {
                 return payload.has_value();
             }
 
@@ -380,13 +344,13 @@ namespace sigslot {
                 awaiting = h;
             }
 
-            auto await_resume() {
+            auto await_resume() const {
                 return *payload;
             }
 
             void resolve(T a) {
                 payload.emplace(a);
-                if (awaiting) ::sigslot::resume_switch(awaiting);
+                if (awaiting) awaiting.resume();
             }
         };
 
@@ -421,7 +385,7 @@ namespace sigslot {
 
             void resolve(T & a) {
                 payload = &a;
-                if (awaiting) ::sigslot::resume_switch(awaiting);
+                if (awaiting) awaiting.resume();
             }
         };
 
@@ -454,7 +418,7 @@ namespace sigslot {
 
             void resolve() {
                 ready = true;
-                if (awaiting) ::sigslot::resume_switch(awaiting);
+                if (awaiting) awaiting.resume();
             }
         };
 
