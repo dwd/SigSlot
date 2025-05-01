@@ -51,7 +51,7 @@ jobs:
       - name: Conan Deps (Debug+Tests)
         run: conan install . -o tests=True -s build_type=Debug -s compiler.cppstd=gnu23  -b missing --version=${{ env.VERSION }}
       - name: CMake tests
-        run: cmake -B gh-build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES="conan_provider.cmake" -DCONAN_INSTALL_ARGS="-o=tests=True;--settings=compiler.cppstd=gnu23;--build=missing;--version=1.0.1-1"
+        run: cmake -B gh-build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES="conan_provider.cmake" -DCONAN_INSTALL_ARGS="-o=tests=True;--settings=compiler.cppstd=gnu23;--build=missing;--version=${{ env.VERSION }}"
       - name: Build
         run: cmake --build gh-build
       - name: Run Tests
